@@ -2,14 +2,14 @@ name: Daily AI Blog Update (Monetize Edition)
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 毎日日本時間の朝9時に自動実行
-  workflow_dispatch: # 手動で動かすボタンを表示
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 記事を書き込むための許可
+      contents: write
     steps:
       - uses: actions/checkout@v4
       
@@ -20,7 +20,7 @@ jobs:
           
       - name: Install dependencies
         run: |
-          pip install google-generativeai google-api-python-client
+          pip install google-generativeai google-api-python-client # ここでYouTube用ツールも確実にインストール
           
       - name: Run AI Script
         env:
@@ -32,6 +32,5 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .  # これで新しい記事ファイルもすべて追加されます
-          # 変更がある場合のみコミット（エラー防止）
+          git add .
           git diff --quiet && git diff --staged --quiet || (git commit -m "Add new AI blog post with YouTube embed" && git push)
