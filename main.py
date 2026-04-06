@@ -3,75 +3,69 @@ import datetime
 import google.generativeai as genai
 from googleapiclient.discovery import build
 
-# 設定（GitHub Secretsから取得）
+# 設定
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def get_youtube_data():
-    """YouTubeから動画を取得。失敗した場合はデフォルトのトピックを返す"""
     try:
         youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
         request = youtube.search().list(
-            q="不労所得 AI 副業",
+            q="AI 副業 不労所得",
             part="snippet",
             maxResults=1,
             order="viewCount",
             type="video"
         )
         res = request.execute()
-        if 'items' in res and len(res['items']) > 0:
-            item = res['items']
-            return item['snippet']['title'], item['id']['videoId']
-    except Exception as e:
-        print(f"YouTube API Error: {e}")
-    
-    # 動画が取れなかった時の予備ネタ
-    return "2026年最新のAI副業術", "dQw4w9WgXcQ" # 予備の動画ID
+        item = res['items']
+        return item['snippet']['title'], item['id']['videoId']
+    except:
+        return "2026年最新のAI副業術", "dQw4w9WgXcQ"
 
 def generate_article(topic, video_id):
-    """Geminiで記事生成"""
     genai.configure(api_key=GEMINI_API_KEY)
-    # モデル名を安定版に変更
+    # 応答が安定している gemini-1.5-flash を使用
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    ad_code = '<div style="text-align:center; margin:20px 0;">[スポンサーリンク]<br></div>'
-    
-    prompt = f"トピック「{topic}」についてSEO記事をHTMLで作成。{ad_code}を含め、出力はHTMLコードのみにすること。"
+    prompt = f"トピック「{topic}」についてSEOに強いブログ記事をHTML形式で書いてください。出力はHTMLコードのみ（<body>の中身）にしてください。Markdownの枠（```）は不要です。"
     
     try:
         response = model.generate_content(prompt)
-        article_body = response.text.strip()
-        # Markdown装飾の除去
-        if article_body.startswith("```"):
-            article_body = article_body.split("```")
-            if article_body.startswith("html"): article_body = article_body[4:]
-        
-        youtube_embed = f'<div style="margin-top:40px;"><h2>関連動画</h2><iframe width="100%" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe></div>'
-        return article_body + youtube_embed
+        # AIの返答が空でないかチェック
+        if response and response.text:
+            article_content = response.text.replace("```html", "").replace("```", "").strip()
+            youtube_embed = f'<div style="margin-top:30px;"><h2>解説動画</h2><iframe width="100%" height="315" src="[https://www.youtube.com/embed/](https://www.youtube.com/embed/){video_id}" frameborder="0" allowfullscreen></iframe></div>'
+            return f"<html><head><meta charset='utf-8'><title>{topic}</title></head><body style='font-family:sans-serif; line-height:1.6; max-width:800px; margin:auto; padding:20px;'><h1>{topic}</h1>{article_content}{youtube_embed}</body></html>"
     except Exception as e:
-        return f"<html><body><h1>{topic}</h1><p>記事の自動生成中にエラーが発生しました。</p></body></html>"
+        print(f"Gemini Error: {e}")
+    
+    # 失敗した場合の最小限のHTML
+    return f"<html><body><h1>{topic}</h1><p>現在AIが記事を執筆中です。しばらくしてから再読み込みしてください。</p></body></html>"
 
 def main():
     title, v_id = get_youtube_data()
     html_article = generate_article(title, v_id)
     
-    # 保存処理
     post_dir = "posts"
     os.makedirs(post_dir, exist_ok=True)
     file_name = f"{post_dir}/{datetime.date.today()}_{v_id}.html"
     
     with open(file_name, "w", encoding="utf-8") as f:
         f.write(html_article)
-        
+    
     # index.htmlの更新
     link = f'<li><a href="{file_name}">{datetime.date.today()} : {title}</a></li>\n'
     if not os.path.exists("index.html"):
-        with open("index.html", "w") as f: f.write("<ul></ul>")
+        with open("index.html", "w", encoding="utf-8") as f: f.write("<html><body><h1>記事一覧</h1><ul></ul></body></html>")
     
     with open("index.html", "r+", encoding="utf-8") as f:
         content = f.read()
-        f.seek(0)
-        f.write(content.replace("<ul>", f"<ul>\n{link}"))
+        if "<ul>" in content:
+            new_content = content.replace("<ul>", f"<ul>\n{link}")
+            f.seek(0)
+            f.write(new_content)
+            f.truncate()
 
 if __name__ == "__main__":
     main()
