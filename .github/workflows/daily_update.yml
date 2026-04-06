@@ -2,19 +2,21 @@ name: Daily AI Blog Update (Monetize Edition)
 
 on:
   schedule:
-    # 日本時間 午前8時 (UTC 23:00) に実行
+    # 日本時間 午前8時 (UTC 23:00)
     - cron: '0 23 * * *'
-  workflow_dispatch: # 手動実行ボタンも残しておきます
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 書き込み権限を明示的に付与
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # すべての履歴を取得してズレを防ぐ
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,7 +37,14 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add .
-          # 更新がある場合のみコミット
-          git diff --quiet && git diff --staged --quiet || git commit -m "Add daily AI blog post $(date +'%Y-%m-%d')"
-          git push
+          
+          # 変更がある場合のみ実行
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "Add daily AI blog post $(date +'%Y-%m-%d')"
+            # 保存前に最新の状態を強制的に取り込んで競合を防ぐ
+            git pull --rebase origin main
+            git push origin main
+          else
+            echo "No changes to commit"
+          fi
